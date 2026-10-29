@@ -1,0 +1,17 @@
+#status { margin: .5em 0; }
+#progress { width: 100%; max-width: 40em; }
+#active, #failures { font-size: .9em; }
+#failures { color: #b00020; }
+#drop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .5);
+  color: #fff;
+  font: bold 1.5em sans-serif;
+  border: .2em dashed #fff;
+  pointer-events: none;
+}
+body.dragging #drop { display: flex; }
