@@ -57,18 +57,25 @@ upserve [PORT]                  port to listen on (default 8000)
   -b, --bind <BIND>             address to listen on (default 0.0.0.0)
   -d, --directory <DIRECTORY>   folder to share (default: the current one)
       --allow-replace           let uploads replace existing files
+      --basic-auth <USERNAME>   require a username and password
 ```
+
+With `--basic-auth`, it asks for the password when it starts, so it doesn't end up in your
+shell history, and everyone gets a login prompt in their browser before they can see
+anything.
 
 ## Is it safe?
 
-It's meant for networks you trust. There are no passwords, so anyone who can reach it can
-download everything in the folder and upload whatever they like into it.
+It's meant for networks you trust. Without `--basic-auth`, anyone who can reach it can
+download everything in the folder and upload whatever they like into it. With it, they
+need the password, but it's plain HTTP, so someone snooping on the network could still
+pick the password up along the way.
 
 What it does make sure of is that nobody can get outside the folder you're sharing:
 paths with `..` in them are refused, and uploads won't follow a symlink that points
 outside it. Symlinks you've made yourself still work for downloads, the same as with
 `http.server`.
 
-One rough edge: if someone closes the page halfway through an upload, the hidden
-`.upserve-*.part` file it was writing to gets left behind. They don't show up in the
-listing, but you might want to clear them out now and then.
+If an upload gets abandoned halfway (someone closes the page, say), the hidden
+`.upserve-*.part` file it was writing to is deleted when upserve exits, and any left over
+from a crash get cleared out the next time it starts.
