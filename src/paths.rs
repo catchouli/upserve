@@ -76,15 +76,29 @@ mod tests {
     fn resolves_plain_paths() {
         let root = Path::new("/srv");
         assert_eq!(resolve(root, "/").unwrap(), root);
-        assert_eq!(resolve(root, "/a/b.txt").unwrap(), root.join("a").join("b.txt"));
+        assert_eq!(
+            resolve(root, "/a/b.txt").unwrap(),
+            root.join("a").join("b.txt")
+        );
         assert_eq!(resolve(root, "//a//b/").unwrap(), root.join("a").join("b"));
-        assert_eq!(resolve(root, "/a%20b/%C3%A9").unwrap(), root.join("a b").join("é"));
+        assert_eq!(
+            resolve(root, "/a%20b/%C3%A9").unwrap(),
+            root.join("a b").join("é")
+        );
     }
 
     #[test]
     fn rejects_traversal() {
         let root = Path::new("/srv");
-        for path in ["/..", "/a/../../etc", "/%2e%2e/etc", "/.", "/a%2f..%2f..", "/a%5c..", "/a%00b"] {
+        for path in [
+            "/..",
+            "/a/../../etc",
+            "/%2e%2e/etc",
+            "/.",
+            "/a%2f..%2f..",
+            "/a%5c..",
+            "/a%00b",
+        ] {
             assert!(resolve(root, path).is_err(), "{path} should be rejected");
         }
     }

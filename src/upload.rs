@@ -40,7 +40,10 @@ impl Upload {
         if target == root {
             return Err(Error::bad_request("missing file name"));
         }
-        let name = target.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let name = target
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         if is_temp_file(name) {
             return Err(Error::bad_request("that file name is reserved"));
         }
@@ -88,7 +91,11 @@ pub async fn write_chunk(
     file.set_len(offset).await?;
     file.seek(SeekFrom::Start(offset)).await?;
 
-    let mut body = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
+    // A failed read means the client went away, e.g. because the upload was cancelled.
+    let body = body
+        .into_data_stream()
+        .map_err(|err| std::io::Error::new(ErrorKind::ConnectionAborted, err));
+    let mut body = StreamReader::new(body);
     tokio::io::copy(&mut body, &mut file).await?;
     Ok(())
 }
@@ -113,10 +120,14 @@ pub async fn finish(
         .map_err(not_found_as_unknown_upload)?;
     let received = file.metadata().await?.len();
     if received != size {
-        return Err(Error::conflict(format!("expected {size} bytes but received {received}")));
+        return Err(Error::conflict(format!(
+            "expected {size} bytes but received {received}"
+        )));
     }
     if let Some(ms) = mtime {
-        file.into_std().await.set_modified(UNIX_EPOCH + Duration::from_millis(ms))?;
+        file.into_std()
+            .await
+            .set_modified(UNIX_EPOCH + Duration::from_millis(ms))?;
     }
 
     place(&upload.temp, &upload.target, allow_replace).await
@@ -181,11 +192,24 @@ mod tests {
         (dir, root)
     }
 
-    async fn upload(root: &Path, path: &str, chunks: &[&str], allow_replace: bool) -> Result<(), Error> {
+    async fn upload(
+        root: &Path,
+        path: &str,
+        chunks: &[&str],
+        allow_replace: bool,
+    ) -> Result<(), Error> {
         let target = paths::resolve(root, path)?;
         let mut offset = 0;
         for chunk in chunks {
-            write_chunk(root, &target, ID, offset, Body::from(chunk.to_string()), allow_replace).await?;
+            write_chunk(
+                root,
+                &target,
+                ID,
+                offset,
+                Body::from(chunk.to_string()),
+                allow_replace,
+            )
+            .await?;
             offset += chunk.len() as u64;
         }
         finish(root, &target, ID, offset, None, allow_replace).await
@@ -194,18 +218,33 @@ mod tests {
     #[tokio::test]
     async fn uploads_in_chunks_into_new_folders() {
         let (_dir, root) = root();
-        upload(&root, "/a/b/file.txt", &["hello ", "world"], false).await.unwrap();
-        assert_eq!(std::fs::read_to_string(root.join("a/b/file.txt")).unwrap(), "hello world");
-        assert_eq!(std::fs::read_dir(root.join("a/b")).unwrap().count(), 1, "temp file left behind");
+        upload(&root, "/a/b/file.txt", &["hello ", "world"], false)
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("a/b/file.txt")).unwrap(),
+            "hello world"
+        );
+        assert_eq!(
+            std::fs::read_dir(root.join("a/b")).unwrap().count(),
+            1,
+            "temp file left behind"
+        );
     }
 
     #[tokio::test]
     async fn retried_chunk_overwrites_previous_attempt() {
         let (_dir, root) = root();
         let target = root.join("f");
-        write_chunk(&root, &target, ID, 0, Body::from("aaaa"), false).await.unwrap();
-        write_chunk(&root, &target, ID, 2, Body::from("garbage"), false).await.unwrap();
-        write_chunk(&root, &target, ID, 2, Body::from("bb"), false).await.unwrap();
+        write_chunk(&root, &target, ID, 0, Body::from("aaaa"), false)
+            .await
+            .unwrap();
+        write_chunk(&root, &target, ID, 2, Body::from("garbage"), false)
+            .await
+            .unwrap();
+        write_chunk(&root, &target, ID, 2, Body::from("bb"), false)
+            .await
+            .unwrap();
         finish(&root, &target, ID, 4, None, false).await.unwrap();
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "aabb");
     }
@@ -214,7 +253,9 @@ mod tests {
     async fn rejects_gaps_and_short_uploads() {
         let (_dir, root) = root();
         let target = root.join("f");
-        write_chunk(&root, &target, ID, 0, Body::from("aa"), false).await.unwrap();
+        write_chunk(&root, &target, ID, 0, Body::from("aa"), false)
+            .await
+            .unwrap();
         let gap = write_chunk(&root, &target, ID, 5, Body::from("bb"), false).await;
         assert_eq!(gap.unwrap_err().status(), 409);
         let short = finish(&root, &target, ID, 10, None, false).await;
@@ -226,7 +267,13 @@ mod tests {
     async fn replaces_only_when_allowed() {
         let (_dir, root) = root();
         upload(&root, "/f", &["one"], false).await.unwrap();
-        assert_eq!(upload(&root, "/f", &["two"], false).await.unwrap_err().status(), 409);
+        assert_eq!(
+            upload(&root, "/f", &["two"], false)
+                .await
+                .unwrap_err()
+                .status(),
+            409
+        );
         upload(&root, "/f", &["three"], true).await.unwrap();
         assert_eq!(std::fs::read_to_string(root.join("f")).unwrap(), "three");
     }
@@ -235,16 +282,34 @@ mod tests {
     async fn never_replaces_folders() {
         let (_dir, root) = root();
         std::fs::create_dir(root.join("d")).unwrap();
-        assert_eq!(upload(&root, "/d", &["x"], true).await.unwrap_err().status(), 409);
+        assert_eq!(
+            upload(&root, "/d", &["x"], true)
+                .await
+                .unwrap_err()
+                .status(),
+            409
+        );
     }
 
     #[tokio::test]
     async fn rejects_reserved_names_and_bad_ids() {
         let (_dir, root) = root();
         let reserved = root.join(format!("{TEMP_PREFIX}{ID}{TEMP_SUFFIX}"));
-        assert!(write_chunk(&root, &reserved, ID, 0, Body::empty(), false).await.is_err());
-        assert!(write_chunk(&root, &root.join("f"), "../x", 0, Body::empty(), false).await.is_err());
-        assert!(write_chunk(&root, &root, ID, 0, Body::empty(), false).await.is_err());
+        assert!(
+            write_chunk(&root, &reserved, ID, 0, Body::empty(), false)
+                .await
+                .is_err()
+        );
+        assert!(
+            write_chunk(&root, &root.join("f"), "../x", 0, Body::empty(), false)
+                .await
+                .is_err()
+        );
+        assert!(
+            write_chunk(&root, &root, ID, 0, Body::empty(), false)
+                .await
+                .is_err()
+        );
     }
 
     #[cfg(unix)]
@@ -253,7 +318,9 @@ mod tests {
         let (_dir, root) = root();
         let (_outside_dir, outside) = self::root();
         std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
-        let err = upload(&root, "/link/new/f", &["x"], false).await.unwrap_err();
+        let err = upload(&root, "/link/new/f", &["x"], false)
+            .await
+            .unwrap_err();
         assert_eq!(err.status(), 403);
         assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
     }

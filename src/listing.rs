@@ -10,7 +10,11 @@ use crate::error::Error;
 use crate::upload;
 
 /// Characters that are percent-encoded in a link to a single path segment.
-const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'.').remove(b'~');
+const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
 
 const SCRIPT: &str = include_str!("../assets/upload.js");
 const STYLE: &str = include_str!("../assets/style.css");
@@ -37,7 +41,10 @@ pub async fn render(dir: &Path, url_path: &str) -> Result<Markup, Error> {
     }
     entries.sort_by_cached_key(|e| e.name.to_lowercase());
 
-    let title = format!("Directory listing for {}", percent_decode_str(url_path).decode_utf8_lossy());
+    let title = format!(
+        "Directory listing for {}",
+        percent_decode_str(url_path).decode_utf8_lossy()
+    );
     Ok(html! {
         (DOCTYPE)
         html lang="en" {

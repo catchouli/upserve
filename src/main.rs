@@ -70,15 +70,26 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind((args.bind, args.port))
         .await
         .with_context(|| format!("can't listen on {}:{}", args.bind, args.port))?;
-    println!("Serving {} at http://{}/", root.display(), listener.local_addr()?);
+    println!(
+        "Serving {} at http://{}/",
+        root.display(),
+        listener.local_addr()?
+    );
 
-    let config = Arc::new(Config { root, allow_replace: args.allow_replace });
+    let config = Arc::new(Config {
+        root,
+        allow_replace: args.allow_replace,
+    });
     let app = Router::new()
         .fallback(handle)
         .with_state(config)
         .layer(DefaultBodyLimit::disable())
         .layer(middleware::from_fn(log));
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -93,15 +104,40 @@ async fn handle(
 
     match (req.method(), params) {
         (&Method::GET | &Method::HEAD, _) => return serve(&target, req).await,
-        (&Method::PUT, Params { upload: Some(id), offset: Some(offset), .. }) => {
+        (
+            &Method::PUT,
+            Params {
+                upload: Some(id),
+                offset: Some(offset),
+                ..
+            },
+        ) => {
             upload::write_chunk(root, &target, &id, offset, req.into_body(), allow_replace).await?
         }
-        (&Method::POST, Params { upload: Some(id), size: Some(size), mtime, .. }) => {
-            upload::finish(root, &target, &id, size, mtime, allow_replace).await?
+        (
+            &Method::POST,
+            Params {
+                upload: Some(id),
+                size: Some(size),
+                mtime,
+                ..
+            },
+        ) => upload::finish(root, &target, &id, size, mtime, allow_replace).await?,
+        (
+            &Method::DELETE,
+            Params {
+                upload: Some(id), ..
+            },
+        ) => upload::abort(root, &target, &id).await?,
+        (&Method::POST, Params { mkdir: Some(_), .. }) => {
+            paths::create_dir_within(root, &target).await?
         }
-        (&Method::DELETE, Params { upload: Some(id), .. }) => upload::abort(root, &target, &id).await?,
-        (&Method::POST, Params { mkdir: Some(_), .. }) => paths::create_dir_within(root, &target).await?,
-        _ => return Err(Error::new(StatusCode::METHOD_NOT_ALLOWED, "unsupported request")),
+        _ => {
+            return Err(Error::new(
+                StatusCode::METHOD_NOT_ALLOWED,
+                "unsupported request",
+            ));
+        }
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }
@@ -124,7 +160,13 @@ async fn log(ConnectInfo(addr): ConnectInfo<SocketAddr>, req: Request, next: Nex
     let (method, uri) = (req.method().clone(), req.uri().clone());
     let response = next.run(req).await;
     if method != Method::PUT || !response.status().is_success() {
-        tracing::info!("{} \"{} {}\" {}", addr.ip(), method, uri, response.status().as_u16());
+        tracing::info!(
+            "{} \"{} {}\" {}",
+            addr.ip(),
+            method,
+            uri,
+            response.status().as_u16()
+        );
     }
     response
 }

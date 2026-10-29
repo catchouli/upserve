@@ -12,7 +12,10 @@ pub struct Error {
 
 impl Error {
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
-        Self { status, message: message.into() }
+        Self {
+            status,
+            message: message.into(),
+        }
     }
 
     pub fn bad_request(message: impl Into<String>) -> Self {
@@ -42,7 +45,7 @@ impl From<io::Error> for Error {
             | ErrorKind::NotADirectory
             | ErrorKind::IsADirectory
             | ErrorKind::DirectoryNotEmpty => StatusCode::CONFLICT,
-            ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
+            ErrorKind::InvalidInput | ErrorKind::ConnectionAborted => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         Self::new(status, err.to_string())
