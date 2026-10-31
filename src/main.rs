@@ -1,5 +1,6 @@
 mod auth;
 mod error;
+mod host;
 mod listing;
 mod paths;
 mod upload;
@@ -23,6 +24,7 @@ use tower_http::services::ServeFile;
 
 use crate::auth::Credentials;
 use crate::error::Error;
+use crate::host::AllowedHosts;
 use crate::upload::Uploads;
 
 /// Share a directory over HTTP, like `python -m http.server`, with file and folder uploads.
@@ -48,6 +50,10 @@ struct Args {
     /// Require this username and a password, which is asked for on startup
     #[arg(long, value_name = "USERNAME")]
     basic_auth: Option<String>,
+
+    /// Also answer to this host name (IP addresses, `localhost` and LAN names always work)
+    #[arg(long, value_name = "HOST")]
+    allow_host: Vec<String>,
 }
 
 struct Config {
@@ -109,7 +115,12 @@ async fn main() -> anyhow::Result<()> {
             auth::require,
         ));
     }
-    let app = app.layer(middleware::from_fn(log));
+    let app = app
+        .layer(middleware::from_fn_with_state(
+            Arc::new(AllowedHosts::new(args.allow_host)),
+            host::require,
+        ))
+        .layer(middleware::from_fn(log));
 
     let server = axum::serve(
         listener,

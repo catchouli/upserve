@@ -58,6 +58,7 @@ upserve [PORT]                  port to listen on (default 8000)
   -d, --directory <DIRECTORY>   folder to share (default: the current one)
       --allow-replace           let uploads replace existing files
       --basic-auth <USERNAME>   require a username and password
+      --allow-host <HOST>       also answer to this host name (can be repeated)
 ```
 
 With `--basic-auth`, it asks for the password when it starts, so it doesn't end up in your
@@ -70,6 +71,12 @@ It's meant for networks you trust. Without `--basic-auth`, anyone who can reach 
 download everything in the folder and upload whatever they like into it. With it, they
 need the password, but it's plain HTTP, so someone snooping on the network could still
 pick the password up along the way.
+
+It also only answers to IP addresses, `localhost` and local network names (`mypc`,
+`mypc.local`, `nas.lan` and the like). That stops a website someone on your network
+happens to visit from pointing its own domain at your machine and using their browser to
+get at your files (a trick called DNS rebinding). If you reach it through some other name,
+add that name with `--allow-host`.
 
 What it does make sure of is that nobody can get outside the folder you're sharing:
 paths with `..` in them are refused, and uploads won't follow a symlink that points
