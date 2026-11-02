@@ -22,6 +22,11 @@ drop files and folders together, and the folder structure is kept (empty folders
 when you drag them in). Everything goes into the folder you're looking at, and the
 listing updates when it's done.
 
+**Pasting** works too: press Ctrl+V on the page and copied files go up as they are, while
+copied text (a snippet, a link) or a screenshot becomes a new file named after the time,
+like `paste-2026-11-02-143012.txt`. It's a quick way to move a bit of text from one PC
+to another.
+
 **Big files** are fine. They're sent in 8 MB chunks, so a dropped connection only costs
 you the chunk it was in (it gets retried), and there's no upload size limit. While a file
 is uploading it goes into a hidden temporary file next to where it's going, and only gets

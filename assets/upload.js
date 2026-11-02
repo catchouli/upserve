@@ -64,6 +64,43 @@ document.addEventListener('drop', async e => {
   enqueue(items);
 });
 
+// Pasting uploads copied files as they are, and text or a screenshot as a new timestamped file.
+document.addEventListener('paste', e => {
+  if (e.target.closest?.('input, textarea, [contenteditable]')) return;
+  const items = [];
+  for (const file of e.clipboardData.files) {
+    // Screenshots and images copied from a page all arrive as "image.png" or similar.
+    const generic = /^image\.\w+$/i.test(file.name);
+    const name = generic ? pasteName(file.name.split('.').pop()) : file.name;
+    items.push({ file: generic ? new File([file], name, { type: file.type }) : file, path: name });
+  }
+  const text = e.clipboardData.getData('text/plain');
+  if (!items.length && text.trim()) {
+    const name = pasteName('txt');
+    items.push({ file: new File([text], name, { type: 'text/plain' }), path: name });
+  }
+  if (!items.length) return;
+  e.preventDefault();
+  enqueue(items);
+});
+
+// The server won't overwrite a file, so pick a name that isn't in the listing or already pasted.
+const pastedNames = new Set();
+function pasteName(ext) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-` +
+    `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const taken = new Set(pastedNames);
+  for (const a of document.querySelectorAll('#listing a')) {
+    taken.add(decodeURIComponent(a.getAttribute('href').replace(/\/$/, '')));
+  }
+  let name = `paste-${stamp}.${ext}`;
+  for (let n = 2; taken.has(name); n++) name = `paste-${stamp}-${n}.${ext}`;
+  pastedNames.add(name);
+  return name;
+}
+
 // Walks a dropped file or folder, adding files to `items`, plus empty folders so they get created too.
 async function collect(entry, prefix, items) {
   const path = prefix + entry.name;
@@ -251,7 +288,7 @@ function draw() {
     progress.value = sent;
     status = `Uploading ${filesDone} of ${filesTotal} files, ${formatSize(sent)} of ${formatSize(totalBytes)}…`;
   } else {
-    status = message || 'Choose files or a folder, or drop them anywhere on this page.';
+    status = message || 'Choose files or a folder, drop them anywhere on this page, or paste files, text or an image.';
   }
   if (selected.length) {
     const size = selected.reduce((sum, item) => sum + item.file.size, 0);
