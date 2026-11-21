@@ -84,6 +84,35 @@ document.addEventListener('paste', e => {
   enqueue(items);
 });
 
+// Phones have no Ctrl+V, and the page can't read the clipboard over plain HTTP, so this box
+// lets you long-press and paste text into it instead.
+$('pick-text').onclick = async () => {
+  $('text-box').hidden = false;
+  $('text').focus();
+  // Only available on HTTPS or localhost; elsewhere the box is filled by hand.
+  if (navigator.clipboard?.readText && !$('text').value) {
+    try {
+      $('text').value = await navigator.clipboard.readText();
+    } catch {
+      // Permission refused or nothing to read: the box just stays empty.
+    }
+  }
+  render();
+};
+$('text').oninput = render;
+$('close-text').onclick = () => {
+  $('text-box').hidden = true;
+  $('text').value = '';
+  render();
+};
+$('upload-text').onclick = () => {
+  const text = $('text').value;
+  if (!text.trim()) return;
+  const name = pasteName('txt');
+  enqueue([{ file: new File([text], name, { type: 'text/plain' }), path: name }]);
+  $('close-text').onclick();
+};
+
 // The server won't overwrite a file, so pick a name that isn't in the listing or already pasted.
 const pastedNames = new Set();
 function pasteName(ext) {
@@ -276,6 +305,7 @@ function render() {
 function draw() {
   renderPending = false;
   $('start').disabled = !selected.length;
+  $('upload-text').disabled = !$('text').value.trim();
   $('cancel').hidden = !running;
 
   const progress = $('progress');

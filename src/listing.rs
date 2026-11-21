@@ -63,9 +63,18 @@ pub async fn render(dir: &Path, url_path: &str) -> Result<Markup, Error> {
                     " "
                     button #pick-folder type="button" { "Choose folder…" }
                     " "
+                    button #pick-text type="button" { "Paste text…" }
+                    " "
                     button #start type="button" disabled { "Upload" }
                     " "
                     button #cancel type="button" hidden { "Cancel" }
+                    div #text-box hidden {
+                        textarea #text rows="6" placeholder="Paste or type text here" {}
+                        br;
+                        button #upload-text type="button" disabled { "Upload text" }
+                        " "
+                        button #close-text type="button" { "Close" }
+                    }
                     p #status {}
                     progress #progress hidden {}
                     ul #active {}

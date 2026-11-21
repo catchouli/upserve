@@ -1,4 +1,6 @@
 #status { margin: .5em 0; }
+#text-box { margin-top: .5em; }
+#text { width: 100%; max-width: 40em; box-sizing: border-box; font: inherit; }
 #progress { width: 100%; max-width: 40em; }
 #active, #failures { font-size: .9em; }
 #failures { color: #b00020; }

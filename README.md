@@ -26,6 +26,8 @@ listing updates when it's done.
 copied text (a snippet, a link) or a screenshot becomes a new file named after the time,
 like `paste-2026-11-02-143012.txt`. It's a quick way to move a bit of text from one PC
 to another.
+On a phone, where there's no Ctrl+V, tap **Paste text…**, long-press in the box to paste,
+and tap **Upload text**.
 
 **Big files** are fine. They're sent in 8 MB chunks, so a dropped connection only costs
 you the chunk it was in (it gets retried), and there's no upload size limit. While a file
